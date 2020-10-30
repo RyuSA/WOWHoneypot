@@ -7,11 +7,9 @@
 import os
 import sys
 import traceback
-import threading
 import re
 import random
 import base64
-import binascii
 import logging
 import logging.handlers
 import socket
@@ -45,7 +43,7 @@ timeout = 3.0
 blocklist = {}
 separator = " "
 ipmasking = False
-sslenable = False
+tlsenable = False
 certfilepath = ""
 
 
@@ -345,8 +343,8 @@ def config_load():
                 else:
                     ipmasking = False
             if line.startswith("certfilepath"):
-                global sslenable, certfilepath
-                sslenable = True
+                global tlsenable, certfilepath
+                tlsenable = True
                 certfilepath = line.split('=')[1].strip()
             if line.startswith("sertfilepath"):
                 global hostport
@@ -443,7 +441,7 @@ def config_load():
 
 
 if __name__ == '__main__':
-    random.seed(datetime.now())
+    random.seed(datetime.now().timestamp())
 
     try:
         config_load()
@@ -454,10 +452,10 @@ if __name__ == '__main__':
         WOWHONEYPOT_VERSION, ip, port, get_time()), False, False)
     logging_system("Hunting: {0}".format(hunt_enable), False, False)
     logging_system("IP Masking: {0}".format(ipmasking), False, False)
-    logging_system("TLS Enabled: {0}".format(sslenable), False, False)
+    logging_system("TLS Enabled: {0}".format(tlsenable), False, False)
     myServer = WOWHoneypotHTTPServer((ip, port), WOWHoneypotRequestHandler)
     myServer.timeout = timeout
-    if sslenable:
+    if tlsenable:
         myServer.socket = ssl.wrap_socket(
             myServer.socket, certfile=certfilepath, server_side=True)
     try:
