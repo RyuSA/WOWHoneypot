@@ -17,6 +17,7 @@ import logging.handlers
 import socket
 import select
 import urllib.parse
+import ssl
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from mrr_checker import parse_mrr
 from datetime import datetime, timedelta, timezone
@@ -30,6 +31,7 @@ syslog_enable = False
 hunt_enable = False
 ip = "0.0.0.0"
 port = 8000
+hostport = 80
 serverheader = "test"
 artpath = "./art/"
 accesslogfile = ""
@@ -43,6 +45,8 @@ timeout = 3.0
 blocklist = {}
 separator = " "
 ipmasking = False
+sslenable = False
+certfilepath = ""
 
 
 class WOWHoneypotHTTPServer(HTTPServer):
@@ -196,9 +200,9 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
                 else:
                     hostname = self.headers["host"].split(" ")[0]
                 if hostname.find(":") == -1:
-                    hostname = hostname + ":80"
+                    hostname = hostname + ":" + hostport
             else:
-                hostname = "blank:80"
+                hostname = "blank:" + hostport
 
             request_all = self.requestline + "\n" + str(self.headers) + body
             logging_access("[{time}]{s}{clientip}{s}{hostname}{s}\"{requestline}\"{s}{status_code}{s}{match_result}{s}{requestall}\n".format(
@@ -340,6 +344,13 @@ def config_load():
                     ipmasking = True
                 else:
                     ipmasking = False
+            if line.startswith("certfilepath"):
+                global sslenable, certfilepath
+                sslenable = True
+                certfilepath = line.split('=')[1].strip()
+            if line.startswith("sertfilepath"):
+                global hostport
+                hostport = line.split('=')[1].strip()
 
         global accesslogfile
         accesslogfile = os.path.join(logpath, accesslogfile_name)
@@ -353,7 +364,7 @@ def config_load():
     # art directory Load
     if not os.path.exists(artpath) or not os.path.isdir(artpath):
         logging_system("{0} directory load error.".format(
-            arttpath), True, True)
+            artpath), True, True)
 
     defaultfile = os.path.join(artpath, "mrrules.xml")
     if not os.path.exists(defaultfile) or not os.path.isfile(defaultfile):
@@ -443,8 +454,12 @@ if __name__ == '__main__':
         WOWHONEYPOT_VERSION, ip, port, get_time()), False, False)
     logging_system("Hunting: {0}".format(hunt_enable), False, False)
     logging_system("IP Masking: {0}".format(ipmasking), False, False)
+    logging_system("TLS Enabled: {0}".format(sslenable), False, False)
     myServer = WOWHoneypotHTTPServer((ip, port), WOWHoneypotRequestHandler)
     myServer.timeout = timeout
+    if sslenable:
+        myServer.socket = ssl.wrap_socket(
+            myServer.socket, certfile=certfilepath, server_side=True)
     try:
         myServer.serve_forever()
     except KeyboardInterrupt:
