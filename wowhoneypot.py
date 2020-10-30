@@ -291,7 +291,7 @@ def config_load():
         sys.exit(1)
     with open(configfile, 'r') as f:
         logpath = "./"
-        accesslogfile_name = "access_log"
+        accesslogfile_name = "access.log"
         wowhoneypotlogfile_name = "wowhoneypot.log"
         huntlog_name = "hunting.log"
         syslogport = 514
