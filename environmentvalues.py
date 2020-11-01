@@ -4,6 +4,16 @@ import os
 class EnvironmentValues:
 
     def __init__(self) -> None:
+
+        # IPアドレス
+        self.ip = "0.0.0.0"
+
+        # サーバーのタイムアウト値
+        self.timeout = 3.0
+
+        # TLSの有効化(cert_file_pathを設定する必要がある)
+        self.tlsenable = False
+
         # default port: 8080
         self.port = 44333
 
@@ -20,7 +30,7 @@ class EnvironmentValues:
         self.separator = " "
 
         # WOWHoneypot logfile name
-        self.wowhoneypot_log = "wowhoneypot.log"
+        self.wowhoneypot_log = self.log_path + "wowhoneypot.log"
 
         # Syslog (Output facility: local0(16), priority: info, only tcp protocol)
         self.syslog_enable = False
@@ -29,7 +39,7 @@ class EnvironmentValues:
 
         # Hunting
         self.hunt_enable = False
-        self.hunt_log = "hunting.log"
+        self.hunt_log = self.log_path + "hunting.log"
 
         # for GDPR(True: replace source ip address with 0.0.0.0)
         self.ipmasking = False

@@ -5,7 +5,6 @@
 # (c) 2017 @morihi_soc
 
 import base64
-from email import message
 import logging
 import logging.handlers
 import os
@@ -29,26 +28,11 @@ WOWHONEYPOT_VERSION = "1.3"
 
 JST = timezone(timedelta(hours=+9), 'JST')
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-syslog_enable = False
-hunt_enable = False
-ip = "0.0.0.0"
-port = 8000
-hostport = 80
-serverheader = "test"
-artpath = "./art/"
-accesslogfile = ""
-wowhoneypotlogfile = ""
-huntrulelogfile = ""
 hunt_rules = []
 default_content = []
 mrrdata = {}
 mrrids = []
-timeout = 3.0
 blocklist = {}
-separator = " "
-ipmasking = False
-tlsenable = False
-certfilepath = ""
 environmentValues = EnvironmentValues.loadEnv()
 
 
@@ -72,10 +56,10 @@ class Request:
 class WOWHoneypotHTTPServer(HTTPServer):
     def server_bind(self):
         HTTPServer.server_bind(self)
-        self.socket.settimeout(timeout)
+        self.socket.settimeout(environmentValues.timeout)
 
     def finish_request(self, request, client_address):
-        request.settimeout(timeout)
+        request.settimeout(environmentValues.timeout)
         HTTPServer.finish_request(self, request, client_address)
 
 
@@ -87,18 +71,19 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
         self.error_content_type = "text/plain"
 
     def handle_one_request(self):
-        if ipmasking == True:
+        if environmentValues.ipmasking == True:
             clientip = "0.0.0.0"
         else:
             clientip = self.client_address[0]
 
-        if not ipmasking and clientip in blocklist and blocklist[clientip] > 3:
+        if not environmentValues.ipmasking and clientip in blocklist and blocklist[clientip] > 3:
             logging_system("Access from blocklist ip({0}). denied.".format(
                 clientip), True, False)
             self.close_connection = True
             return
         try:
-            (r, w, e) = select.select([self.rfile], [], [], timeout)
+            (r, w, e) = select.select([self.rfile],
+                                      [], [], environmentValues.timeout)
             if len(r) == 0:
                 errmsg = "Client({0}) data sending was too late.".format(
                     clientip)
@@ -181,7 +166,7 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
 
             if not match:
                 self.send_response(200)
-                self.send_header("Server", serverheader)
+                self.send_header("Server", environmentValues.server_header)
                 self.send_header('Content-Type', 'text/html')
                 r = default_content[random.randint(0, len(default_content)-1)]
                 self.send_header('Content-Length', len(r))
@@ -200,7 +185,7 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
                         header_content_type_flag = True
 
                 if not header_server_flag:
-                    self.send_header('Server', serverheader)
+                    self.send_header('Server', environmentValues.server_header)
                 if not header_content_type_flag:
                     self.send_header('Content-Type', 'text/html')
                 r = mrrdata[match]["response"]["body"]
@@ -218,15 +203,16 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
                 else:
                     hostname = self.headers["host"].split(" ")[0]
                 if hostname.find(":") == -1:
-                    hostname = "{0}:{1}".format(hostname, hostport)
+                    hostname = "{0}:{1}".format(
+                        hostname, environmentValues.host_port)
             else:
-                hostname = "blank:{0}".format(hostport)
+                hostname = "blank:{0}".format(environmentValues.host_port)
 
             request = Request(time=get_time(), clientip=clientip, hostname=hostname,
                               requestline=self.requestline, header=str(self.headers), payload=body)
             logging.info("{message}".format(message=request.to_json()))
             # Hunting
-            if hunt_enable:
+            if environmentValues.hunt_enable:
                 decoded_request_all = urllib.parse.unquote(request.to_json())
                 for hunt_rule in hunt_rules:
                     for hit in re.findall(hunt_rule, decoded_request_all):
@@ -262,13 +248,13 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
 def logging_system(message, is_error, is_exit):
     if not is_error:  # CYAN
         print("\u001b[36m[INFO]{0}\u001b[0m".format(message))
-        file = open(wowhoneypotlogfile, "a")
+        file = open(environmentValues.wowhoneypot_log, "a")
         file.write("[{0}][INFO]{1}\n".format(get_time(), message))
         file.close()
 
     else:  # RED
         print("\u001b[31m[ERROR]{0}\u001b[0m".format(message))
-        file = open(wowhoneypotlogfile, "a")
+        file = open(environmentValues.wowhoneypot_log, "a")
         file.write("[{0}][ERROR]{1}\n".format(get_time(), message))
         file.close()
 
@@ -277,7 +263,7 @@ def logging_system(message, is_error, is_exit):
 
 
 def logging_hunt(message):
-    with open(huntrulelogfile, 'a') as f:
+    with open(environmentValues.hunt_log, 'a') as f:
         f.write(message)
 
 
@@ -297,6 +283,7 @@ def config_load():
         wowhoneypotlogfile_name = "wowhoneypot.log"
         huntlog_name = "hunting.log"
         syslogport = 514
+        artpath = "./art"
 
         for line in f:
             if line.startswith("#") or line.find("=") == -1:
@@ -304,62 +291,20 @@ def config_load():
             if line.startswith("serverheader"):
                 global serverheader
                 serverheader = line.split('=')[1].strip()
-            if line.startswith("port"):
-                global port
-                port = int(line.split('=')[1].strip())
             if line.startswith("artpath"):
                 artpath = line.split('=')[1].strip()
             if line.startswith("logpath"):
                 logpath = line.split('=')[1].strip()
             if line.startswith("accesslog"):
                 accesslogfile_name = line.split('=')[1].strip()
-            if line.startswith("separator"):
-                global separator
-                separator = line.strip().split('=')[1].split('"')[1]
-                if len(separator) < 1:
-                    separator = " "
             if line.startswith("wowhoneypotlog"):
                 wowhoneypotlogfile_name = line.split('=')[1].strip()
-            if line.startswith("syslog_enable"):
-                global syslog_enable
-                if line.split('=')[1].strip() == "True":
-                    syslog_enable = True
-                else:
-                    syslog_enable = False
             if line.startswith("syslogserver"):
                 syslogserver = line.split('=')[1].strip()
             if line.startswith("syslogport"):
                 syslogport = line.split('=')[1].strip()
-            if line.startswith("hunt_enable"):
-                global hunt_enable
-                if line.split('=')[1].strip() == "True":
-                    hunt_enable = True
-                else:
-                    hunt_enable = False
             if line.startswith("huntlog"):
                 huntlog_name = line.split('=')[1].strip()
-            if line.startswith("ipmasking"):
-                global ipmasking
-                if line.split('=')[1].strip() == "True":
-                    ipmasking = True
-                else:
-                    ipmasking = False
-            if line.startswith("certfilepath"):
-                global tlsenable, certfilepath
-                tlsenable = True
-                certfilepath = line.split('=')[1].strip()
-            if line.startswith("sertfilepath"):
-                global hostport
-                hostport = line.split('=')[1].strip()
-
-        global accesslogfile
-        accesslogfile = os.path.join(logpath, accesslogfile_name)
-
-        global wowhoneypotlogfile
-        wowhoneypotlogfile = os.path.join(logpath, wowhoneypotlogfile_name)
-
-        global huntrulelogfile
-        huntrulelogfile = os.path.join(logpath, huntlog_name)
 
     # art directory Load
     if not os.path.exists(artpath) or not os.path.isdir(artpath):
@@ -413,7 +358,7 @@ def config_load():
         logging_system("default html content not exist.", True, True)
 
     # Hunting
-    if hunt_enable:
+    if environmentValues.hunt_enable:
         huntrulefile = os.path.join(artpath, "huntrules.txt")
         if not os.path.exists(huntrulefile) or not os.path.isfile(huntrulefile):
             logging_system("{0} file load error.".format(
@@ -435,15 +380,19 @@ if __name__ == '__main__':
         print(traceback.format_exc())
         sys.exit(1)
     logging_system("WOWHoneypot(version {0}) start. {1}:{2} at {3}".format(
-        WOWHONEYPOT_VERSION, ip, port, get_time()), False, False)
-    logging_system("Hunting: {0}".format(hunt_enable), False, False)
-    logging_system("IP Masking: {0}".format(ipmasking), False, False)
-    logging_system("TLS Enabled: {0}".format(tlsenable), False, False)
-    myServer = WOWHoneypotHTTPServer((ip, port), WOWHoneypotRequestHandler)
-    myServer.timeout = timeout
-    if tlsenable:
+        WOWHONEYPOT_VERSION, environmentValues.ip, environmentValues.port, get_time()), False, False)
+    logging_system("Hunting: {0}".format(
+        environmentValues.hunt_enable), False, False)
+    logging_system("IP Masking: {0}".format(
+        environmentValues.ipmasking), False, False)
+    logging_system("TLS Enabled: {0}".format(
+        environmentValues.tlsenable), False, False)
+    myServer = WOWHoneypotHTTPServer(
+        (environmentValues.ip, environmentValues.port), WOWHoneypotRequestHandler)
+    myServer.timeout = environmentValues.timeout
+    if environmentValues.tlsenable:
         myServer.socket = ssl.wrap_socket(
-            myServer.socket, certfile=certfilepath, server_side=True)
+            myServer.socket, certfile=environmentValues.certfile_path, server_side=True)
     try:
         myServer.serve_forever()
     except KeyboardInterrupt:
