@@ -32,7 +32,7 @@ huntlog=hunting.log
 ipmasking=False
 
 # SSL certfile path
-certfilepath=./server.pem
+# certfilepath=./server.pem
 
 # default host header port: 80
 hostport=443

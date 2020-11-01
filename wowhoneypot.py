@@ -4,27 +4,31 @@
 # author @morihi_soc
 # (c) 2017 @morihi_soc
 
-import os
-import sys
-import traceback
-import re
-import random
 import base64
+from email import message
 import logging
 import logging.handlers
-import socket
+import os
+import random
+import json
+import re
 import select
-import urllib.parse
+import socket
 import ssl
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from mrr_checker import parse_mrr
+import sys
+from sys import version
+import traceback
+import urllib.parse
 from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+from environmentvalues import EnvironmentValues
+from mrr_checker import parse_mrr
 
 WOWHONEYPOT_VERSION = "1.3"
 
 JST = timezone(timedelta(hours=+9), 'JST')
-logger = logging.getLogger('SyslogLogger')
-logger.setLevel(logging.INFO)
+logging.basicConfig(format='%(message)s', level=logging.INFO)
 syslog_enable = False
 hunt_enable = False
 ip = "0.0.0.0"
@@ -45,6 +49,24 @@ separator = " "
 ipmasking = False
 tlsenable = False
 certfilepath = ""
+environmentValues = EnvironmentValues.loadEnv()
+
+
+class Request:
+    def __init__(self, time, clientip, hostname, requestline, header: str, payload) -> None:
+        method, path, version = requestline.split(" ")
+        self.time = time
+        self.clientip = clientip
+        self.hostname = hostname
+        self.path = path
+        self.version = version
+        self.method = method
+        self.header = header
+        self.payload = base64.b64encode(
+            payload.encode('utf-8')).decode('utf-8')
+
+    def to_json(self):
+        return json.dumps(self.__dict__, ensure_ascii=False)
 
 
 class WOWHoneypotHTTPServer(HTTPServer):
@@ -59,7 +81,6 @@ class WOWHoneypotHTTPServer(HTTPServer):
 
 class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
     def send_response(self, code, message=None):
-        self.log_request(code)
         self.send_response_only(code, message)
         self.send_header('Date', self.date_time_string())
         self.error_message_format = "error"
@@ -192,31 +213,21 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
             # logging
             hostname = None
             if "host" in self.headers:
-
                 if self.headers["host"].find(" ") == -1:
                     hostname = self.headers["host"]
                 else:
                     hostname = self.headers["host"].split(" ")[0]
                 if hostname.find(":") == -1:
-                    hostname = hostname + ":" + hostport
+                    hostname = "{0}:{1}".format(hostname, hostport)
             else:
-                hostname = "blank:" + hostport
+                hostname = "blank:{0}".format(hostport)
 
-            request_all = self.requestline + "\n" + str(self.headers) + body
-            logging_access("[{time}]{s}{clientip}{s}{hostname}{s}\"{requestline}\"{s}{status_code}{s}{match_result}{s}{requestall}\n".format(
-                time=get_time(),
-                clientip=clientip,
-                hostname=hostname,
-                requestline=self.requestline,
-                status_code=status,
-                match_result=match,
-                requestall=base64.b64encode(
-                    request_all.encode('utf-8')).decode('utf-8'),
-                s=separator
-            ))
+            request = Request(time=get_time(), clientip=clientip, hostname=hostname,
+                              requestline=self.requestline, header=str(self.headers), payload=body)
+            logging.info("{message}".format(message=request.to_json()))
             # Hunting
             if hunt_enable:
-                decoded_request_all = urllib.parse.unquote(request_all)
+                decoded_request_all = urllib.parse.unquote(request.to_json())
                 for hunt_rule in hunt_rules:
                     for hit in re.findall(hunt_rule, decoded_request_all):
                         logging_hunt("[{time}] {clientip} {hit}\n".format(time=get_time(),
@@ -248,13 +259,6 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
             return
 
 
-def logging_access(log):
-    with open(accesslogfile, 'a') as f:
-        f.write(log)
-    if syslog_enable:
-        logger.log(msg="{0} {1}".format(__file__, log), level=logging.INFO)
-
-
 def logging_system(message, is_error, is_exit):
     if not is_error:  # CYAN
         print("\u001b[36m[INFO]{0}\u001b[0m".format(message))
@@ -271,8 +275,6 @@ def logging_system(message, is_error, is_exit):
     if is_exit:
         sys.exit(1)
 
-# Hunt
-
 
 def logging_hunt(message):
     with open(huntrulelogfile, 'a') as f:
@@ -280,7 +282,7 @@ def logging_hunt(message):
 
 
 def get_time():
-    return "{0:%Y-%m-%d %H:%M:%S%z}".format(datetime.now(JST))
+    return "{0:%Y-%m-%dT%H:%M:%S%z}".format(datetime.now(JST))
 
 
 def config_load():
@@ -422,22 +424,6 @@ def config_load():
                 line = line.rstrip()
                 if len(line) > 0:
                     hunt_rules.append(line)
-
-    # Syslog
-    if syslog_enable:
-        try:
-            sport = int(syslogport)
-        except ValueError:
-            logging_system("syslogport({0}) not valid.".format(
-                syslogport), True, True)
-        try:
-            handler = logging.handlers.SysLogHandler(address=(syslogserver, int(sport)),
-                                                     facility=16,  # facility 16: local0
-                                                     socktype=socket.SOCK_STREAM)
-            logger.addHandler(handler)
-        except TimeoutError:
-            logging_system(
-                "syslog tcp connection timed out. Wrong hostname/port? ({0}:{1})".format(syslogserver, sport), True, True)
 
 
 if __name__ == '__main__':
