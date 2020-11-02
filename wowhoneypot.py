@@ -17,7 +17,6 @@ import ssl
 import sys
 from sys import version
 import traceback
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -28,11 +27,9 @@ WOWHONEYPOT_VERSION = "1.3"
 
 JST = timezone(timedelta(hours=+9), 'JST')
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-hunt_rules = []
 default_content = []
 mrrdata = {}
 mrrids = []
-blocklist = {}
 environmentValues = EnvironmentValues.loadEnv()
 
 
@@ -76,11 +73,6 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
         else:
             clientip = self.client_address[0]
 
-        if not environmentValues.ipmasking and clientip in blocklist and blocklist[clientip] > 3:
-            logging_system("Access from blocklist ip({0}). denied.".format(
-                clientip), True, False)
-            self.close_connection = True
-            return
         try:
             (r, w, e) = select.select([self.rfile],
                                       [], [], environmentValues.timeout)
@@ -211,14 +203,6 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
             request = Request(time=get_time(), clientip=clientip, hostname=hostname,
                               requestline=self.requestline, header=str(self.headers), payload=body)
             logging.info("{message}".format(message=request.to_json()))
-            # Hunting
-            if environmentValues.hunt_enable:
-                decoded_request_all = urllib.parse.unquote(request.to_json())
-                for hunt_rule in hunt_rules:
-                    for hit in re.findall(hunt_rule, decoded_request_all):
-                        logging_hunt("[{time}] {clientip} {hit}\n".format(time=get_time(),
-                                                                          clientip=clientip,
-                                                                          hit=hit))
 
         except socket.timeout as e:
             emsg = "{0}".format(e)
@@ -229,31 +213,21 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
             self.log_error(errmsg)
             self.close_connection = True
             logging_system(errmsg, True, False)
-            if clientip in blocklist:
-                blocklist[clientip] = blocklist[clientip] + 1
-            else:
-                blocklist[clientip] = 1
             return
         except Exception as e:
             errmsg = "Request handling Failed: {0} - {1}".format(type(e), e)
             self.close_connection = True
             logging_system(errmsg, True, False)
-            if clientip in blocklist:
-                blocklist[clientip] = blocklist[clientip] + 1
-            else:
-                blocklist[clientip] = 1
             return
 
 
 def logging_system(message, is_error, is_exit):
     if not is_error:  # CYAN
-        print("\u001b[36m[INFO]{0}\u001b[0m".format(message))
         file = open(environmentValues.wowhoneypot_log, "a")
         file.write("[{0}][INFO]{1}\n".format(get_time(), message))
         file.close()
 
     else:  # RED
-        print("\u001b[31m[ERROR]{0}\u001b[0m".format(message))
         file = open(environmentValues.wowhoneypot_log, "a")
         file.write("[{0}][ERROR]{1}\n".format(get_time(), message))
         file.close()
@@ -262,56 +236,17 @@ def logging_system(message, is_error, is_exit):
         sys.exit(1)
 
 
-def logging_hunt(message):
-    with open(environmentValues.hunt_log, 'a') as f:
-        f.write(message)
-
-
 def get_time():
     return "{0:%Y-%m-%dT%H:%M:%S%z}".format(datetime.now(JST))
 
 
 def config_load():
-    configfile = "./config.txt"
-    if not os.path.exists(configfile):
-        print(
-            "\u001b[31m[ERROR]{0} dose not exist...\u001b[0m".format(configfile))
-        sys.exit(1)
-    with open(configfile, 'r') as f:
-        logpath = "./"
-        accesslogfile_name = "access.log"
-        wowhoneypotlogfile_name = "wowhoneypot.log"
-        huntlog_name = "hunting.log"
-        syslogport = 514
-        artpath = "./art"
-
-        for line in f:
-            if line.startswith("#") or line.find("=") == -1:
-                continue
-            if line.startswith("serverheader"):
-                global serverheader
-                serverheader = line.split('=')[1].strip()
-            if line.startswith("artpath"):
-                artpath = line.split('=')[1].strip()
-            if line.startswith("logpath"):
-                logpath = line.split('=')[1].strip()
-            if line.startswith("accesslog"):
-                accesslogfile_name = line.split('=')[1].strip()
-            if line.startswith("wowhoneypotlog"):
-                wowhoneypotlogfile_name = line.split('=')[1].strip()
-            if line.startswith("syslogserver"):
-                syslogserver = line.split('=')[1].strip()
-            if line.startswith("syslogport"):
-                syslogport = line.split('=')[1].strip()
-            if line.startswith("huntlog"):
-                huntlog_name = line.split('=')[1].strip()
-
     # art directory Load
-    if not os.path.exists(artpath) or not os.path.isdir(artpath):
+    if not os.path.exists(environmentValues.art_path) or not os.path.isdir(environmentValues.art_path):
         logging_system("{0} directory load error.".format(
-            artpath), True, True)
+            environmentValues.art_path), True, True)
 
-    defaultfile = os.path.join(artpath, "mrrules.xml")
+    defaultfile = os.path.join(environmentValues.art_path, "mrrules.xml")
     if not os.path.exists(defaultfile) or not os.path.isfile(defaultfile):
         logging_system("{0} file load error.".format(defaultfile), True, True)
 
@@ -328,7 +263,8 @@ def config_load():
     else:
         logging_system("mrrules.xml reading error.", True, True)
 
-    defaultlocal_file = os.path.join(artpath, "mrrules_local.xml")
+    defaultlocal_file = os.path.join(
+        environmentValues.art_path, "mrrules_local.xml")
     if os.path.exists(defaultlocal_file) and os.path.isfile(defaultlocal_file):
         logging_system("mrrules_local.xml reading start.", False, False)
         mrrdata2 = parse_mrr(defaultlocal_file, os.path.split(defaultfile)[0])
@@ -341,7 +277,7 @@ def config_load():
         mrrdata.update(mrrdata2)
         mrrids = sorted(list(mrrdata.keys()), reverse=True)
 
-    artdefaultpath = os.path.join(artpath, "default")
+    artdefaultpath = os.path.join(environmentValues.art_path, "default")
     if not os.path.exists(artdefaultpath) or not os.path.isdir(artdefaultpath):
         logging_system("{0} directory load error.".format(
             artdefaultpath), True, True)
@@ -356,19 +292,6 @@ def config_load():
 
     if len(default_content) == 0:
         logging_system("default html content not exist.", True, True)
-
-    # Hunting
-    if environmentValues.hunt_enable:
-        huntrulefile = os.path.join(artpath, "huntrules.txt")
-        if not os.path.exists(huntrulefile) or not os.path.isfile(huntrulefile):
-            logging_system("{0} file load error.".format(
-                huntrulefile), True, True)
-
-        with open(huntrulefile, 'r') as f:
-            for line in f:
-                line = line.rstrip()
-                if len(line) > 0:
-                    hunt_rules.append(line)
 
 
 if __name__ == '__main__':
