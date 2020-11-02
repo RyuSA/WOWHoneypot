@@ -308,11 +308,11 @@ if __name__ == '__main__':
     logging_system("IP Masking: {0}".format(
         environmentValues.ipmasking), False, False)
     logging_system("TLS Enabled: {0}".format(
-        environmentValues.tlsenable), False, False)
+        environmentValues.tls_enable), False, False)
     myServer = WOWHoneypotHTTPServer(
         (environmentValues.ip, environmentValues.port), WOWHoneypotRequestHandler)
     myServer.timeout = environmentValues.timeout
-    if environmentValues.tlsenable:
+    if environmentValues.tls_enable:
         myServer.socket = ssl.wrap_socket(
             myServer.socket, certfile=environmentValues.certfile_path, server_side=True)
     try:

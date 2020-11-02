@@ -17,7 +17,7 @@ class EnvironmentValues:
 
         # enable TLS
         # you may want to set cert_file_path
-        self.tlsenable = False
+        self.tls_enable = False
 
         # TLS certfile path
         # this propatiy will be ignored if tlsenable = false
