@@ -30,7 +30,7 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 default_content = []
 mrrdata = {}
 mrrids = []
-environmentValues = EnvironmentValues.loadEnv()
+environmentValues = EnvironmentValues.get_instance()
 
 
 class Request:
@@ -158,7 +158,8 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
 
             if not match:
                 self.send_response(200)
-                self.send_header("Server", environmentValues.server_header)
+                if environmentValues.server_header:
+                    self.send_header("Server", environmentValues.server_header)
                 self.send_header('Content-Type', 'text/html')
                 r = default_content[random.randint(0, len(default_content)-1)]
                 self.send_header('Content-Length', len(r))
@@ -304,8 +305,6 @@ if __name__ == '__main__':
         sys.exit(1)
     logging_system("WOWHoneypot(version {0}) start. {1}:{2} at {3}".format(
         WOWHONEYPOT_VERSION, environmentValues.ip, environmentValues.port, get_time()), False, False)
-    logging_system("Hunting: {0}".format(
-        environmentValues.hunt_enable), False, False)
     logging_system("IP Masking: {0}".format(
         environmentValues.ipmasking), False, False)
     logging_system("TLS Enabled: {0}".format(

@@ -5,20 +5,33 @@ class EnvironmentValues:
 
     def __init__(self) -> None:
 
-        # IPアドレス
+        # server ipaddress
         self.ip = "0.0.0.0"
 
-        # サーバーのタイムアウト値
+        # default port: 8080
+        # Wowhoneypot will listen `port`
+        self.port = 8080
+
+        # server timeout(sec)
         self.timeout = 3.0
 
-        # TLSの有効化(cert_file_pathを設定する必要がある)
+        # enable TLS
+        # you may want to set cert_file_path
         self.tlsenable = False
 
-        # default port: 8080
-        self.port = 44333
+        # TLS certfile path
+        # this propatiy will be ignored if tlsenable = false
+        self.certfile_path = "./server.pem"
 
-        # default server header: Apache
-        self.server_header = "Apache"
+        # default server header: None;
+        # server_header = None introduce that the response header doesn't contain "Server: SOMETHING"
+        self.server_header = None
+
+        # for GDPR(True: replace source ip address with 0.0.0.0)
+        self.ipmasking = False
+
+        # default host header port: the same as `port`
+        self.host_port = self.port
 
         # art directory path
         self.art_path = "./art/"
@@ -26,31 +39,11 @@ class EnvironmentValues:
         # WOWHoneypot logfile path
         self.log_path = "./log/"
 
-        # Access log separator
-        self.separator = " "
-
         # WOWHoneypot logfile name
         self.wowhoneypot_log = self.log_path + "wowhoneypot.log"
 
-        # Syslog (Output facility: local0(16), priority: info, only tcp protocol)
-        self.syslog_enable = False
-        self.syslog_server = "127.0.0.1"
-        self.syslog_port = "514"
-
-        # Hunting
-        self.hunt_enable = False
-        self.hunt_log = self.log_path + "hunting.log"
-
-        # for GDPR(True: replace source ip address with 0.0.0.0)
-        self.ipmasking = False
-
-        # SSL certfile path
-        self.certfile_path = "./server.pem"
-
-        # default host header port: 80
-        self.host_port = 443
-
-    def loadEnv():
+    @classmethod
+    def get_instance(cls):
         instance = EnvironmentValues()
         for field in instance.__dict__.keys():
             value = os.environ.get(field.upper())
