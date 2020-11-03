@@ -20,22 +20,29 @@ spec:
         runAsUser: 1000
         runAsGroup: 3000
         fsGroup: 2000
-        allowPrivilegeEscalation: false
       containers:
         - name: wowhoneypot
           image: ryusa/wowhoneypot:1.0
-          environments:
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CAP_NET_BIND_SERVICE
+          env:
             - name: TLS_ENABLE
-              value: True
-            - name: CERFILE_PATH
-              value: /app/cert/server.pem
+              value: "True"
+            - name: CERTFILE_PATH
+              value: "/app/cert/server.pem"
+            - name: "PORT"
+              value: "8080"
           ports:
-            - containerPort: 443
+            - containerPort: 8080
           volumeMounts:
-            - name: cert
+            - name: wowhoneypot-cert
               mountPath: /app/cert
               readOnly: true
       volumes:
-        - name: cert
+        - name: wowhoneypot-cert
           secret:
-            secretName: sert
+            secretName: wowhoneypot-cert
