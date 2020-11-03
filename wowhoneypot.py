@@ -223,16 +223,6 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
 
 
 def logging_system(message, is_error, is_exit):
-    if not is_error:  # CYAN
-        file = open(environmentValues.wowhoneypot_log, "a")
-        file.write("[{0}][INFO]{1}\n".format(get_time(), message))
-        file.close()
-
-    else:  # RED
-        file = open(environmentValues.wowhoneypot_log, "a")
-        file.write("[{0}][ERROR]{1}\n".format(get_time(), message))
-        file.close()
-
     if is_exit:
         sys.exit(1)
 
