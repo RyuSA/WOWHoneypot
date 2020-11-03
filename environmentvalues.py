@@ -43,10 +43,25 @@ class EnvironmentValues:
         self.wowhoneypot_log = self.log_path + "wowhoneypot.log"
 
     @classmethod
+    def __is_num(cls, s):
+        try:
+            float(s)
+        except ValueError:
+            return False
+        else:
+            return True
+
+    @classmethod
     def get_instance(cls):
         instance = EnvironmentValues()
         for field in instance.__dict__.keys():
             value = os.environ.get(field.upper())
             if value:
-                exec("instance.{0} = {1}".format(field, value))
+                if value == "True" or value == "Falce" or cls.__is_num(value):
+                    # Booleanや数値はそのまま代入
+                    exec("instance.{0} = {1}".format(field, value))
+                else:
+                    # 文字列と見なす
+                    exec("instance.{0} = \"{1}\"".format(field, value))
+
         return instance
