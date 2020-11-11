@@ -36,11 +36,14 @@ class EnvironmentValues:
         # art directory path
         self.art_path = "./art/"
 
-        # WOWHoneypot logfile path
+        # logfile path
         self.log_path = "./log/"
 
         # WOWHoneypot logfile name
         self.wowhoneypot_log = self.log_path + "wowhoneypot.log"
+
+        # access.log
+        self.access_log = self.log_path + "access.log"
 
     @classmethod
     def __is_num(cls, s):

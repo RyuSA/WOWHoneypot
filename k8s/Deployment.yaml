@@ -42,13 +42,19 @@ spec:
               value: "/app/cert/server.pem"
             - name: "PORT"
               value: "8080"
+            - name: ACCESS_LOG 
+              value: "/var/log/containers/access.log"
           ports:
             - containerPort: 8080
           volumeMounts:
             - name: wowhoneypot-cert
               mountPath: /app/cert
               readOnly: true
+            - name: access-log
+              mountPath: /var/log/containers/
       volumes:
         - name: wowhoneypot-cert
           secret:
             secretName: wowhoneypot-cert
+        - name: access-log
+          emptyDir: {}
