@@ -74,7 +74,7 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
             clientip = self.client_address[0]
 
         try:
-            (r, w, e) = select.select([self.rfile],
+            (r, _, e) = select.select([self.rfile],
                                       [], [], environmentValues.timeout)
             if len(r) == 0:
                 errmsg = "Client({0}) data sending was too late.".format(
@@ -274,7 +274,7 @@ def config_load():
             artdefaultpath), True, True)
 
     global default_content
-    for root, dirs, files in os.walk(artdefaultpath):
+    for _, __, files in os.walk(artdefaultpath):
         for file in files:
             if not file.startswith(".") and file.endswith(".html"):
                 tmp = open(os.path.join(artdefaultpath, file), 'r')
