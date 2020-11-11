@@ -5,8 +5,6 @@
 # (c) 2017 @morihi_soc
 
 import base64
-import logging
-import logging.handlers
 import os
 import random
 import json
@@ -21,16 +19,17 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from environmentvalues import EnvironmentValues
+from WOWHoneypotLogger import WOWHoneypotLogger
 from mrr_checker import parse_mrr
 
 WOWHONEYPOT_VERSION = "1.3"
 
 JST = timezone(timedelta(hours=+9), 'JST')
-logging.basicConfig(format='%(message)s', level=logging.INFO)
 default_content = []
 mrrdata = {}
 mrrids = []
 environmentValues = EnvironmentValues.get_instance()
+logger = WOWHoneypotLogger(access_log_file=environmentValues.access_log)
 
 
 class Request:
@@ -61,6 +60,9 @@ class WOWHoneypotHTTPServer(HTTPServer):
 
 
 class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
+
+    __logger: WOWHoneypotLogger = logger
+
     def send_response(self, code, message=None):
         self.send_response_only(code, message)
         self.send_header('Date', self.date_time_string())
@@ -203,7 +205,7 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
 
             request = Request(time=get_time(), clientip=clientip, hostname=hostname,
                               requestline=self.requestline, header=str(self.headers), payload=body)
-            logging.info("{message}".format(message=request.to_json()))
+            self.__logger.access("{message}".format(message=request.to_json()))
 
         except socket.timeout as e:
             emsg = "{0}".format(e)
@@ -213,35 +215,30 @@ class WOWHoneypotRequestHandler(BaseHTTPRequestHandler):
                 errmsg = "Request timed out: {0}".format(emsg)
             self.log_error(errmsg)
             self.close_connection = True
-            logging_system(errmsg, True, False)
+            self.__logger.system(errmsg)
             return
         except Exception as e:
             errmsg = "Request handling Failed: {0} - {1}".format(type(e), e)
             self.close_connection = True
-            logging_system(errmsg, True, False)
+            self.__logger.system(errmsg)
             return
-
-
-def logging_system(message, is_error, is_exit):
-    if is_exit:
-        sys.exit(1)
 
 
 def get_time():
     return "{0:%Y-%m-%dT%H:%M:%S%z}".format(datetime.now(JST))
 
 
-def config_load():
+def config_load(logger: WOWHoneypotLogger):
     # art directory Load
     if not os.path.exists(environmentValues.art_path) or not os.path.isdir(environmentValues.art_path):
-        logging_system("{0} directory load error.".format(
-            environmentValues.art_path), True, True)
+        logger.system("{0} directory load error.".format(
+            environmentValues.art_path))
 
     defaultfile = os.path.join(environmentValues.art_path, "mrrules.xml")
     if not os.path.exists(defaultfile) or not os.path.isfile(defaultfile):
-        logging_system("{0} file load error.".format(defaultfile), True, True)
+        logger.system("{0} file load error.".format(defaultfile))
 
-    logging_system("mrrules.xml reading start.", False, False)
+    logger.system("mrrules.xml reading start.")
 
     global mrrdata
     mrrdata = parse_mrr(defaultfile, os.path.split(defaultfile)[0])
@@ -250,28 +247,27 @@ def config_load():
     mrrids = sorted(list(mrrdata.keys()), reverse=True)
 
     if mrrdata:
-        logging_system("mrrules.xml reading complete.", False, False)
+        logger.system("mrrules.xml reading complete.")
     else:
-        logging_system("mrrules.xml reading error.", True, True)
+        logger.system("mrrules.xml reading error.")
 
     defaultlocal_file = os.path.join(
         environmentValues.art_path, "mrrules_local.xml")
     if os.path.exists(defaultlocal_file) and os.path.isfile(defaultlocal_file):
-        logging_system("mrrules_local.xml reading start.", False, False)
+        logger.system("mrrules_local.xml reading start.")
         mrrdata2 = parse_mrr(defaultlocal_file, os.path.split(defaultfile)[0])
 
         if mrrdata2:
-            logging_system("mrrules_local.xml reading complete.", False, False)
+            logger.system("mrrules_local.xml reading complete.")
         else:
-            logging_system("mrrules_local.xml reading error.", True, True)
+            logger.system("mrrules_local.xml reading error.")
 
         mrrdata.update(mrrdata2)
         mrrids = sorted(list(mrrdata.keys()), reverse=True)
 
     artdefaultpath = os.path.join(environmentValues.art_path, "default")
     if not os.path.exists(artdefaultpath) or not os.path.isdir(artdefaultpath):
-        logging_system("{0} directory load error.".format(
-            artdefaultpath), True, True)
+        logger.system("{0} directory load error.".format(artdefaultpath))
 
     global default_content
     for _, __, files in os.walk(artdefaultpath):
@@ -282,23 +278,21 @@ def config_load():
                 tmp.close()
 
     if len(default_content) == 0:
-        logging_system("default html content not exist.", True, True)
+        logger.system("default html content not exist.")
 
 
 if __name__ == '__main__':
     random.seed(datetime.now().timestamp())
 
     try:
-        config_load()
+        config_load(logger)
     except Exception:
         print(traceback.format_exc())
         sys.exit(1)
-    logging_system("WOWHoneypot(version {0}) start. {1}:{2} at {3}".format(
-        WOWHONEYPOT_VERSION, environmentValues.ip, environmentValues.port, get_time()), False, False)
-    logging_system("IP Masking: {0}".format(
-        environmentValues.ipmasking), False, False)
-    logging_system("TLS Enabled: {0}".format(
-        environmentValues.tls_enable), False, False)
+    logger.system("WOWHoneypot(version {0}) start. {1}:{2} at {3}".format(
+        WOWHONEYPOT_VERSION, environmentValues.ip, environmentValues.port, get_time()))
+    logger.system("IP Masking: {0}".format(environmentValues.ipmasking))
+    logger.system("TLS Enabled: {0}".format(environmentValues.tls_enable))
     myServer = WOWHoneypotHTTPServer(
         (environmentValues.ip, environmentValues.port), WOWHoneypotRequestHandler)
     myServer.timeout = environmentValues.timeout
