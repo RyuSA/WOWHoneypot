@@ -2,3 +2,4 @@ log/access.log
 log/wowhoneypot.log
 __pycache__
 server.pem
+.vscode
