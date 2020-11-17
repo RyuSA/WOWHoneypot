@@ -16,7 +16,7 @@ data:
       @type tail
       @id in_tail_container_logs
       @label @containers
-      path /var/log/containers/*.log
+      path /var/log/containers/access.log
       pos_file /usr/local/fluentd-containers.log.pos
       tag *
       read_from_head true

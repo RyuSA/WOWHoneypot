@@ -16,11 +16,27 @@ spec:
       labels:
         app: wowhoneypot
     spec:
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
       containers:
+        - name: fluentd
+          image: fluent/fluentd-kubernetes-daemonset:v1.11.5-debian-cloudwatch-1.0
+          env:
+            - name: REGION
+              value: us-east-2
+            - name: AWS_REGION
+              value: us-east-2
+            - name: CLUSTER_NAME
+              value: honeypot
+          resources:
+            limits:
+              memory: 400Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          volumeMounts:
+            - name: fluentdconf
+              mountPath: /fluentd/etc
+            - name: access-log
+              mountPath: /var/log/containers
         - name: wowhoneypot
           image: ryusa/wowhoneypot:1.0
           resources:
@@ -36,25 +52,18 @@ spec:
               drop:
                 - ALL
           env:
-            - name: TLS_ENABLE
-              value: "True"
-            - name: CERTFILE_PATH
-              value: "/app/cert/server.pem"
             - name: "PORT"
               value: "8080"
-            - name: ACCESS_LOG 
+            - name: ACCESS_LOG
               value: "/var/log/containers/access.log"
           ports:
             - containerPort: 8080
           volumeMounts:
-            - name: wowhoneypot-cert
-              mountPath: /app/cert
-              readOnly: true
             - name: access-log
               mountPath: /var/log/containers/
       volumes:
-        - name: wowhoneypot-cert
-          secret:
-            secretName: wowhoneypot-cert
         - name: access-log
           emptyDir: {}
+        - name: fluentdconf
+          configMap:
+            name: fluentd-wowhoneypot-config
